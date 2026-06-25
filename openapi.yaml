@@ -1,0 +1,604 @@
+openapi: 3.0.3
+info:
+  title: STAC API Multi-Tenant Catalogs Endpoint Extension
+  version: 1.0.0-rc.2
+  description: |
+    An extension that adds a dedicated `/catalogs` endpoint to support a 
+    Multi-Tenant architecture. It allows a STAC API to act as a registry for 
+    multiple independent sub-catalogs (recursive hierarchy) without altering 
+    the standard behavior of the API Root.
+    
+    **Conformance Classes:**
+    * Core (Read-Only): `.../multi-tenant-catalogs`
+    * Search (Optional): `.../multi-tenant-catalogs/search`
+    * Item Search Base: `https://api.stacspec.org/v1.0.0/item-search` (Required if Search is implemented)
+    * Management (Optional): `.../multi-tenant-catalogs/transaction`
+    
+    Includes "Safety-First" transaction logic where deletions via this endpoint 
+    are strictly organizational (unlinking) and never destructive to data.
+paths:
+  # ----------------------------------------------------------------------
+  # 1. THE REGISTRY LIST (Root Catalogs)
+  # ----------------------------------------------------------------------
+  /catalogs:
+    get:
+      tags:
+        - "Discovery (Core)"
+      summary: List available sub-catalogs
+      operationId: getCatalogs
+      responses:
+        '200':
+          description: A list of catalogs
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CatalogsList'
+    post:
+      tags:
+        - "Management (Optional Transactions)"
+      summary: Register a new Root Catalog
+      operationId: createCatalog
+      requestBody:
+        description: The Catalog definition
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/Catalog'
+      responses:
+        '201':
+          description: Catalog created successfully
+          headers:
+            Location:
+              description: The location of the created catalog
+              schema:
+                type: string
+
+  # ----------------------------------------------------------------------
+  # 2. THE SUB-CATALOG LANDING PAGE & DISBAND
+  # ----------------------------------------------------------------------
+  /catalogs/{catalogId}:
+    parameters:
+      - $ref: '#/components/parameters/catalogId'
+    get:
+      tags:
+        - "Discovery (Core)"
+      summary: Get the Landing Page for a specific sub-catalog
+      description: |
+        Returns a STAC Catalog/Landing Page. 
+        **Note on Links:** To support poly-hierarchy and UI traversal (e.g., STAC Browser), 
+        the `links` array is dynamically generated. It MUST include a `rel="child"` link 
+        for each nested sub-catalog/collection. It MUST include exactly one `rel="parent"` link 
+        pointing to the context through which it was accessed. Alternative parents in a 
+        poly-hierarchy MUST be represented using `rel="related"` links.
+      operationId: getCatalog
+      responses:
+        '200':
+          description: A STAC Landing Page scoped to this catalog
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/LandingPage'
+    put:
+      tags:
+        - "Management (Optional Transactions)"
+      summary: Update Catalog Metadata
+      description: |
+        Updates the catalog's title, description, and other metadata.
+        This operation preserves existing hierarchy links (parent_ids) 
+        unless explicitly modified.
+      operationId: updateCatalog
+      requestBody:
+        description: The updated Catalog definition
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/Catalog'
+      responses:
+        '200':
+          description: Catalog updated successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Catalog'
+    delete:
+      tags:
+        - "Management (Optional Transactions)"
+      summary: Disband a Catalog
+      description: |
+        Deletes the Catalog resource. All child collections and sub-catalogs are 
+        UNLINKED but NOT DELETED. Orphaned children are adopted by the root.
+      operationId: deleteCatalog
+      responses:
+        '204':
+          description: Catalog deleted (disbanded) successfully
+
+  # ----------------------------------------------------------------------
+  # 3. SUB-CATALOG MANAGEMENT (Hierarchy)
+  # ----------------------------------------------------------------------
+  /catalogs/{catalogId}/catalogs:
+    parameters:
+      - $ref: '#/components/parameters/catalogId'
+    get:
+      tags:
+        - "Discovery (Core)"
+      summary: List sub-catalogs of this catalog
+      description: Returns only the child catalogs (hierarchy traversal).
+      operationId: getSubCatalogs
+      responses:
+        '200':
+          description: A list of sub-catalogs
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CatalogsList'
+    post:
+      tags:
+        - "Management (Optional Transactions)"
+      summary: Create or Link a Sub-Catalog
+      description: |
+        Creates a new catalog and links it as a child of {catalogId}, OR links 
+        an existing catalog by passing its ID (Link by Reference). 
+        Linking by reference allows for Poly-Hierarchy (Directed Acyclic Graphs), 
+        where a single catalog can have multiple parents.
+      operationId: createSubCatalog
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              oneOf:
+                - $ref: '#/components/schemas/Catalog'
+                - $ref: '#/components/schemas/ObjectUri'
+      responses:
+        '201':
+          description: Sub-Catalog created and linked
+        '200':
+          description: Existing Sub-Catalog successfully linked
+
+  /catalogs/{catalogId}/catalogs/{subCatalogId}:
+    parameters:
+      - $ref: '#/components/parameters/catalogId'
+      - $ref: '#/components/parameters/subCatalogId'
+    delete:
+      tags:
+        - "Management (Optional Transactions)"
+      summary: Unlink a Sub-Catalog
+      description: |
+        Removes the link between the parent and sub-catalog. 
+        The sub-catalog resource is NOT deleted.
+      operationId: unlinkSubCatalog
+      responses:
+        '204':
+          description: Sub-Catalog unlinked successfully
+
+  # ----------------------------------------------------------------------
+  # 4. CHILDREN EXTENSION (Mixed Content)
+  # ----------------------------------------------------------------------
+  /catalogs/{catalogId}/children:
+    parameters:
+      - $ref: '#/components/parameters/catalogId'
+      - name: type
+        in: query
+        description: Filter children by type (Catalog or Collection)
+        schema:
+          type: string
+          enum: [Catalog, Collection]
+    get:
+      tags:
+        - "Discovery (Core)"
+      summary: Get all children (Catalogs and Collections)
+      operationId: getCatalogChildren
+      responses:
+        '200':
+          description: A list of child resources
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ChildrenList'
+
+  # ----------------------------------------------------------------------
+  # 5. SUB-CATALOG CONFORMANCE
+  # ----------------------------------------------------------------------
+  /catalogs/{catalogId}/conformance:
+    parameters:
+      - $ref: '#/components/parameters/catalogId'
+    get:
+      tags:
+        - "Discovery (Core)"
+      summary: Get conformance classes for this specific sub-catalog
+      operationId: getCatalogConformance
+      responses:
+        '200':
+          description: STAC/OGC Conformance classes
+          content:
+            application/json:
+              schema:
+                type: object
+
+  # ----------------------------------------------------------------------
+  # 6. SCOPED SEARCH (Optional)
+  # ----------------------------------------------------------------------
+  /catalogs/{catalogId}/search:
+    parameters:
+      - $ref: '#/components/parameters/catalogId'
+    get:
+      tags:
+        - "Discovery (Core)"
+      summary: Search items in a catalog's descendant tree
+      description: |
+        Performs a STAC item search strictly bounded to the hierarchy of {catalogId}.
+        Evaluates items from all Collections directly linked to {catalogId} and 
+        all Collections linked to any descendant Sub-Catalog nested beneath {catalogId}.
+        
+        Accepts the same query parameters as the core STAC `/search` endpoint. 
+        The `collections` parameter is intersected with the catalog's allowed descendant collections.
+      operationId: getCatalogSearch
+      parameters:
+        - name: collections
+          in: query
+          description: Array of collection IDs to search. The API computes the intersection with the catalog's allowed descendant collections.
+          schema:
+            type: array
+            items:
+              type: string
+        - name: bbox
+          in: query
+          description: Bounding box for spatial filtering (minx,miny,maxx,maxy or minx,miny,minz,maxx,maxy,maxz)
+          schema:
+            type: array
+            minItems: 4
+            maxItems: 6
+            items:
+              type: number
+        - name: datetime
+          in: query
+          description: Datetime range for temporal filtering (RFC 3339 format or open-ended ranges)
+          schema:
+            type: string
+        - name: limit
+          in: query
+          description: Maximum number of items to return
+          schema:
+            type: integer
+        - name: ids
+          in: query
+          description: Array of item IDs to search for
+          schema:
+            type: array
+            items:
+              type: string
+        - name: intersects
+          in: query
+          description: GeoJSON geometry for spatial filtering (alternative to bbox)
+          content:
+            application/geo+json:
+              schema:
+                type: object
+      responses:
+        '200':
+          description: A GeoJSON FeatureCollection of matching items
+          content:
+            application/geo+json:
+              schema:
+                $ref: '#/components/schemas/FeatureCollection'
+    post:
+      tags:
+        - "Discovery (Core)"
+      summary: Search items in a catalog's descendant tree
+      description: |
+        Performs a STAC item search strictly bounded to the hierarchy of {catalogId}.
+        Evaluates items from all Collections directly linked to {catalogId} and 
+        all Collections linked to any descendant Sub-Catalog nested beneath {catalogId}.
+        
+        Accepts the same request body as the core STAC `/search` endpoint. 
+        The `collections` parameter is intersected with the catalog's allowed descendant collections.
+      operationId: postCatalogSearch
+      requestBody:
+        description: Search query parameters (STAC search body)
+        required: false
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SearchBody'
+      responses:
+        '200':
+          description: A GeoJSON FeatureCollection of matching items
+          content:
+            application/geo+json:
+              schema:
+                $ref: '#/components/schemas/FeatureCollection'
+
+  # ----------------------------------------------------------------------
+  # 7. SCOPED COLLECTIONS MANAGEMENT
+  # ----------------------------------------------------------------------
+  /catalogs/{catalogId}/collections:
+    parameters:
+      - $ref: '#/components/parameters/catalogId'
+    get:
+      tags:
+        - "Discovery (Core)"
+      summary: List collections within a specific sub-catalog
+      operationId: getCatalogCollections
+      responses:
+        '200':
+          description: A STAC Collections object
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Collections'
+    post:
+      tags:
+        - "Management (Optional Transactions)"
+      summary: Create or Link a Collection in this Catalog
+      description: |
+        Creates a new collection and links it as a child of {catalogId}, OR links 
+        an existing collection by passing its ID (Link by Reference). 
+        Linking by reference allows for Poly-Hierarchy (Directed Acyclic Graphs), 
+        where a single collection can belong to multiple catalogs.
+      operationId: createCatalogCollection
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              oneOf:
+                - $ref: '#/components/schemas/Collection'
+                - $ref: '#/components/schemas/ObjectUri'
+      responses:
+        '201':
+          description: Collection created and linked
+        '200':
+          description: Existing Collection successfully linked
+
+  # ----------------------------------------------------------------------
+  # 8. SCOPED SINGLE COLLECTION
+  # ----------------------------------------------------------------------
+  /catalogs/{catalogId}/collections/{collectionId}:
+    parameters:
+      - $ref: '#/components/parameters/catalogId'
+      - $ref: '#/components/parameters/collectionId'
+    get:
+      tags:
+        - "Discovery (Core)"
+      summary: Get a specific collection definition
+      description: |
+        Returns a STAC Collection scoped to this specific catalog.
+        
+        **Note on Links:** To preserve contextual breadcrumbs in UI clients, this MUST include 
+        exactly one `rel="parent"` link pointing to the `{catalogId}` through which it was accessed. 
+        Alternative parents in a poly-hierarchy MAY be represented using `rel="related"` links. 
+        It SHOULD include a `rel="canonical"` link pointing to the global `/collections/{collectionId}` 
+        endpoint, and MAY include `rel="duplicate"` links pointing to other scoped paths where 
+        this identical resource can be accessed.
+        
+        Conversely, `/collections/{collectionId}` MAY also include `rel="duplicate"` links to their 
+        `/catalogs/{catalogId}/collections/{collectionId}` counterparts.
+      operationId: getCatalogCollection
+      responses:
+        '200':
+          description: A STAC Collection object
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Collection'
+    put:
+      tags:
+        - "Management (Optional Transactions)"
+      summary: Update Collection Metadata
+      description: |
+        Updates the collection's title, description, and other metadata.
+        This operation preserves existing hierarchy links (parent_ids) 
+        unless explicitly modified.
+      operationId: updateCatalogCollection
+      requestBody:
+        description: The updated Collection definition
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/Collection'
+      responses:
+        '200':
+          description: Collection updated successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Collection'
+    delete:
+      tags:
+        - "Management (Optional Transactions)"
+      summary: Unlink a Collection
+      description: |
+        Removes the link between the catalog and collection. 
+        The Collection data is NEVER deleted via this route.
+      operationId: unlinkCatalogCollection
+      responses:
+        '204':
+          description: Collection unlinked successfully
+
+  # ----------------------------------------------------------------------
+  # 9. SCOPED ITEMS (Search)
+  # ----------------------------------------------------------------------
+  /catalogs/{catalogId}/collections/{collectionId}/items:
+    parameters:
+      - $ref: '#/components/parameters/catalogId'
+      - $ref: '#/components/parameters/collectionId'
+    get:
+      tags:
+        - "Discovery (Core)"
+      summary: Get items from a collection within a sub-catalog
+      operationId: getCatalogCollectionItems
+      responses:
+        '200':
+          description: A STAC FeatureCollection
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/FeatureCollection'
+
+  # ----------------------------------------------------------------------
+  # 10. SCOPED SINGLE ITEM
+  # ----------------------------------------------------------------------
+  /catalogs/{catalogId}/collections/{collectionId}/items/{itemId}:
+    parameters:
+      - $ref: '#/components/parameters/catalogId'
+      - $ref: '#/components/parameters/collectionId'
+      - name: itemId
+        in: path
+        required: true
+        schema: 
+          type: string
+    get:
+      tags:
+        - "Discovery (Core)"
+      summary: Get a single item
+      operationId: getCatalogItem
+      responses:
+        '200':
+          description: A STAC Item (Feature)
+          content:
+            application/geo+json:
+              schema:
+                $ref: '#/components/schemas/Item'
+
+  # ----------------------------------------------------------------------
+  # 11. SUB-CATALOG QUERYABLES (Optional)
+  # ----------------------------------------------------------------------
+  /catalogs/{catalogId}/queryables:
+    parameters:
+      - $ref: '#/components/parameters/catalogId'
+    get:
+      tags:
+        - "Discovery (Core)"
+      summary: Get queryable fields for this sub-catalog
+      operationId: getCatalogQueryables
+      responses:
+        '200':
+          description: A JSON Schema of queryable fields
+          content:
+            application/schema+json:
+              schema:
+                $ref: '#/components/schemas/Queryables'
+
+  # ----------------------------------------------------------------------
+  # 12. SCOPED COLLECTION QUERYABLES
+  # ----------------------------------------------------------------------
+  /catalogs/{catalogId}/collections/{collectionId}/queryables:
+    parameters:
+      - $ref: '#/components/parameters/catalogId'
+      - $ref: '#/components/parameters/collectionId'
+    get:
+      tags:
+        - "Discovery (Core)"
+      summary: Get queryable fields for a specific collection
+      operationId: getCatalogCollectionQueryables
+      responses:
+        '200':
+          description: A JSON Schema of queryable fields
+          content:
+            application/schema+json:
+              schema:
+                $ref: '#/components/schemas/Queryables'
+
+components:
+  parameters:
+    catalogId:
+      name: catalogId
+      in: path
+      description: The unique identifier of the sub-catalog
+      required: true
+      schema:
+        type: string
+    subCatalogId:
+      name: subCatalogId
+      in: path
+      description: The unique identifier of the child sub-catalog
+      required: true
+      schema:
+        type: string
+    collectionId:
+      name: collectionId
+      in: path
+      description: The unique identifier of the collection
+      required: true
+      schema:
+        type: string
+
+  schemas:
+    CatalogsList:
+      type: object
+      required:
+        - catalogs
+        - links
+      properties:
+        catalogs:
+          type: array
+          items:
+            $ref: '#/components/schemas/Catalog'
+        links:
+          type: array
+          items:
+            $ref: '#/components/schemas/Link'
+    
+    ChildrenList:
+      type: object
+      required:
+        - children
+        - links
+      properties:
+        children:
+          type: array
+          items:
+            # Polymorphic schema (can be Catalog or Collection)
+            type: object 
+        links:
+          type: array
+          items:
+            $ref: '#/components/schemas/Link'
+
+    # Placeholders for Standard STAC Objects
+    Catalog:
+      type: object
+      description: A standard STAC Catalog object
+    LandingPage:
+      type: object
+      description: A standard STAC Landing Page object
+    Collections:
+      type: object
+      description: A standard STAC Collections object
+    Collection:
+      type: object
+      description: A standard STAC Collection object
+    FeatureCollection:
+      type: object
+      description: A GeoJSON FeatureCollection
+    Item:
+      type: object
+      description: A STAC Item
+    Link:
+      type: object
+      required:
+        - rel
+        - href
+      properties:
+        rel:
+          type: string
+        href:
+          type: string
+    ObjectUri:
+      type: object
+      description: Minimal payload for linking existing resources by ID.
+      required:
+        - id
+      properties:
+        id:
+          type: string
+          description: The ID of the existing resource to link.
+    Queryables:
+      type: object
+      description: A JSON Schema object for queryables
+    SearchBody:
+      type: object
+      description: STAC Item Search request body (same shape as the core /search endpoint). Supports spatial (bbox, intersects), temporal (datetime), and collection filtering.
