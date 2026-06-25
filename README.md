@@ -4,13 +4,18 @@
 * **Conformance Classes:**
 * `https://api.stacspec.org/v1.0.0/core` (required)
 * `https://api.stacspec.org/v1.0.0-beta.1/async-export` (required)
+* `https://api.stacspec.org/v1.0.0/item-search` (required if implementing `/search/export`)
+* `https://api.stacspec.org/v1.0.0-rc.2/multi-tenant-catalogs` (required if implementing `/catalogs/{catalogId}/search/export`)
+* `https://api.stacspec.org/v1.0.0-rc.2/multi-tenant-catalogs/search` (required if implementing `/catalogs/{catalogId}/search/export`)
 
 
 * **Scope:** STAC API - Core
 * **Extension Maturity Classification:** Proposal
 * **Dependencies:**
 * STAC API - Core
-* STAC API - Item Search (Recommended, as query structures heavily overlap)
+* STAC API - Item Search (Required if implementing `/search/export`)
+* Multi-Tenant Catalogs Extension (Required if implementing `/catalogs/{catalogId}/search/export`)
+* Multi-Tenant Catalogs Search Conformance (Required if implementing `/catalogs/{catalogId}/search/export`)
 
 
 * **Owner:** @jonhealy1
