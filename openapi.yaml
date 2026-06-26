@@ -11,15 +11,16 @@ info:
     Conformance classes:
     - https://api.stacspec.org/v1.0.0/core (required)
     - https://api.stacspec.org/v1.0.0-beta.1/async-export (required)
-    - https://api.stacspec.org/v1.0.0/item-search (required if implementing /search/export)
+    - https://api.stacspec.org/v1.0.0-rc.2/multi-tenant-catalogs (required if implementing /catalogs/{catalogId}/search/export)
+    - https://api.stacspec.org/v1.0.0-rc.2/multi-tenant-catalogs/search (required if implementing /catalogs/{catalogId}/search/export)
 
 tags:
   - name: Capabilities
     description: Discover export features supported by the implementation.
   - name: Exports
     description: Create and monitor async export jobs.
-  - name: Search-Appended (Optional)
-    description: Optional search-scoped routes that initiate exports.
+  - name: Scoped Catalog Export (Optional)
+    description: Optional catalog-scoped route for export initiation.
 
 paths:
   /export/capabilities:
@@ -110,16 +111,19 @@ paths:
               schema:
                 $ref: '#/components/schemas/Error'
 
-  /search/export:
+  /catalogs/{catalogId}/search/export:
     post:
       tags:
-        - Search-Appended (Optional)
-      summary: Initiate export from global search route
-      operationId: createSearchExport
+        - Scoped Catalog Export (Optional)
+      summary: Initiate export from catalog-scoped search route
+      operationId: createCatalogSearchExport
       description: |
-        Optional route. Functionally equivalent to POST /export.
+        Optional route for implementations that support Multi-Tenant Catalogs.
 
-        Requires support for STAC Item Search.
+        The export must be scoped to items reachable from the specified
+        catalog hierarchy.
+      parameters:
+        - $ref: '#/components/parameters/catalogId'
       requestBody:
         required: true
         content:
@@ -153,6 +157,14 @@ components:
       in: path
       required: true
       description: Unique export task identifier.
+      schema:
+        type: string
+
+    catalogId:
+      name: catalogId
+      in: path
+      required: true
+      description: Catalog identifier used for search scoping.
       schema:
         type: string
 

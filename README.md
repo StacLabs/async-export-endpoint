@@ -4,7 +4,6 @@
 * **Conformance Classes:**
 * `https://api.stacspec.org/v1.0.0/core` (required)
 * `https://api.stacspec.org/v1.0.0-beta.1/async-export` (required)
-* `https://api.stacspec.org/v1.0.0/item-search` (required if implementing `/search/export`)
 * `https://api.stacspec.org/v1.0.0-rc.2/multi-tenant-catalogs` (required if implementing `/catalogs/{catalogId}/search/export`)
 * `https://api.stacspec.org/v1.0.0-rc.2/multi-tenant-catalogs/search` (required if implementing `/catalogs/{catalogId}/search/export`)
 
@@ -13,7 +12,7 @@
 * **Extension Maturity Classification:** Proposal
 * **Dependencies:**
 * STAC API - Core
-* STAC API - Item Search (Required if implementing `/search/export`)
+* STAC API - Item Search (Required if implementing `/catalogs/{catalogId}/search/export`)
 * Multi-Tenant Catalogs Extension (Required if implementing `/catalogs/{catalogId}/search/export`)
 * Multi-Tenant Catalogs Search Conformance (Required if implementing `/catalogs/{catalogId}/search/export`)
 
@@ -42,15 +41,14 @@ Implementations MUST support the following core endpoints to conform to this ext
 | `POST` | `/export` | Initiate Export. Submits a query and begins the asynchronous background task. |
 | `GET` | `/export/{exportId}` | Status Check. Retrieves the current status of the task and the download link if completed. |
 
-### Search-Appended Endpoints (Optional)
+### Catalog-Scoped Endpoint (Optional)
 
-To provide a superior Developer Experience (DX), implementations that support STAC Item Search (`/search`) or contextual searches SHOULD optionally append the `/export` path to their existing search routes.
+To provide a scoped export workflow, implementations that support Multi-Tenant Catalogs MAY append `/export` to the catalog-scoped search route.
 
-This allows clients to intuitively convert any existing search query into a background export task simply by updating the URL, without modifying their JSON payload. Furthermore, the URL path inherently scopes the export, reducing the need for complex filter definitions in the body.
+This allows clients to initiate an export that is inherently constrained by the catalog path, reducing the need for complex filter definitions in the request body.
 
 | Method | URI | Description |
 | --- | --- | --- |
-| `POST` | `/search/export` | **Global Search Export.** Functionally identical to `POST /export`. |
 | `POST` | `/catalogs/{catalogId}/search/export` | **Catalog-Scoped Export.** (For use with the *Multi-Tenant Catalogs Extension*). The worker MUST restrict output to items belonging to collections within the `{catalogId}` tree. |
 
 **Note on Status Checks for Appended Routes:** If an API implements the optional search-appended initiation routes, it MUST return a `status_url` in the `202 Accepted` response that points to the core status endpoint (e.g., `https://api.example.com/export/{exportId}`). It is NOT required to mirror the status check endpoints across all search paths.
