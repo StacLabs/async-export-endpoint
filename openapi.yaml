@@ -415,8 +415,23 @@ components:
           minimum: 0
           description: Size of the exported file in bytes.
         error:
-          type: string
-          description: Error message if status is failed.
+          oneOf:
+            - type: string
+              description: Human-readable error message when status is failed.
+            - type: object
+              required:
+                - code
+                - description
+              properties:
+                code:
+                  type: string
+                  description: Error code (e.g., ItemLimitExceeded, InvalidCredentials)
+                description:
+                  type: string
+                  description: Detailed error description
+        truncated:
+          type: boolean
+          description: True if export was truncated due to max_items_limit. Only present if status is successful and truncation occurred.
 
     Error:
       type: object

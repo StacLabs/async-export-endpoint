@@ -83,7 +83,109 @@ When the delivery method is `polling`, clients query this endpoint to check the 
 Once the status is `completed`, the response MUST include a `download_url`.
 
 **The `?redirect=true` Parameter:**
-To facilitate seamless browser downloads, servers SHOULD support a `redirect=true` query parameter. If this parameter is present and the task is `completed`, the server MUST respond with a `303 See Other` HTTP status, redirecting the client directly to the `download_url`. This allows UI clients to trigger native "Save As..." browser dialogs.
+To facilitate seamless browser downloads, servers SHOULD support a `redirect=true` query parameter. If this parameter is present and the task is `successful`, the server MUST respond with a `303 See Other` HTTP status, redirecting the client directly to the `download_url`. This allows UI clients to trigger native "Save As..." browser dialogs.
+
+## Error Handling and Limit Enforcement
+
+### Item Count Limits
+
+The capabilities endpoint advertises `max_items_limit`, which defines the maximum number of items a single export can contain.
+
+#### Behavior When Query Exceeds Limit
+
+When a query matches more items than `max_items_limit`:
+
+**Option A: Immediate Rejection (Recommended)**
+- The server returns `400 Bad Request` immediately upon receiving the request
+- Response includes an error message indicating the limit was exceeded and the estimated item count
+- Client must refine the query (e.g., smaller bbox, narrower datetime range) and retry
+
+```json
+{
+  "code": "ItemLimitExceeded",
+  "description": "Query matches 600,000 items, but max_items_limit is 500,000. Please refine your search criteria."
+}
+```
+
+**Option B: Truncation with Warning**
+- The server accepts the request and returns `202 Accepted`
+- Processing proceeds, but only the first `max_items_limit` items are exported
+- The completed status response includes a `truncated` flag and warning message
+- Client can determine if the partial export is acceptable
+
+```json
+{
+  "jobID": "exp-a1b2c3d4",
+  "status": "successful",
+  "item_count": 500000,
+  "estimated_items": 600000,
+  "truncated": true,
+  "message": "Export truncated to max_items_limit of 500,000. Query matched 600,000 items."
+}
+```
+
+**Recommendation:** Implementations SHOULD choose Option A (immediate rejection) for predictability and to prevent client confusion. Option B is acceptable for implementations that prefer to provide partial results.
+
+### Empty Result Sets
+
+If a query matches 0 items:
+
+- **Option 1:** Return `400 Bad Request` immediately with a descriptive error message
+- **Option 2:** Accept the request and complete the task with an empty export file
+
+The choice depends on the requested format and delivery method. For example:
+- GeoParquet with S3 delivery might reject empty results (invalid Parquet)
+- GeoJSON with polling delivery might accept empty results (valid empty FeatureCollection)
+
+Servers MUST document their behavior for empty results in the API documentation.
+
+### Failed Jobs
+
+When a job's status is `failed`, the response MUST include one of the following:
+
+1. **`error` field (string):** A human-readable error message explaining the failure
+2. **`error` object:** A structured error with `code` and `description` fields
+
+```json
+{
+  "jobID": "exp-a1b2c3d4",
+  "status": "failed",
+  "error": "Insufficient disk space to generate export file. Please try again later."
+}
+```
+
+Or:
+
+```json
+{
+  "jobID": "exp-a1b2c3d4",
+  "status": "failed",
+  "error": {
+    "code": "InsufficientStorage",
+    "description": "Insufficient disk space to generate export file. Please try again later."
+  }
+}
+```
+
+**Common Failure Reasons:**
+- `ItemLimitExceeded`: Query matched more items than `max_items_limit`
+- `UnsupportedFormat`: Requested format is not supported
+- `UnsupportedDeliveryMethod`: Requested delivery method is not supported
+- `InvalidCredentials`: Cloud credentials (S3, GCS, Azure) are invalid or expired
+- `DestinationUnreachable`: Cannot write to the provided `destination_uri`
+- `ProcessingTimeout`: Export processing exceeded the server's timeout limit
+- `InsufficientStorage`: Server ran out of disk space during processing
+- `InvalidQuery`: Search parameters are malformed or invalid
+
+### HTTP Status Codes
+
+| Status | Scenario | Response Body |
+| --- | --- | --- |
+| `202 Accepted` | Job successfully queued | ExportAccepted schema |
+| `400 Bad Request` | Invalid request, unsupported format, limit exceeded, or empty results rejected | Error object with `code` and `description` |
+| `404 Not Found` | Job ID does not exist | Error object |
+| `501 Not Implemented` | Requested format or delivery method not supported | Error object |
+| `503 Service Unavailable` | Server temporarily unable to process exports | Error object |
 
 ---
 
@@ -180,6 +282,25 @@ To facilitate seamless browser downloads, servers SHOULD support a `redirect=tru
 
 ```
 
+**Response (`200 OK` - Failed):**
+
+```json
+{
+  "jobID": "exp-a1b2c3d4",
+  "type": "process",
+  "status": "failed",
+  "created": "2025-06-27T10:30:00Z",
+  "started": "2025-06-27T10:31:00Z",
+  "finished": "2025-06-27T10:32:00Z",
+  "updated": "2025-06-27T10:32:00Z",
+  "error": {
+    "code": "InvalidCredentials",
+    "description": "Failed to authenticate to S3 bucket. Please verify your credentials and try again."
+  }
+}
+
+```
+
 ### 4. Direct-to-S3 Delivery (Cloud Push)
 
 If the user requests `delivery.method: "s3"`, the server bypasses local storage and streams the generated file directly into the client's private cloud bucket. The user MUST provide a `destination_uri` where the server has been granted write permissions.
@@ -235,6 +356,33 @@ If the user requested `delivery.method: "webhook"`, the server will dispatch the
   "download_url": "https://data.example.com/downloads/exp-a1b2c3d4.parquet",
   "item_count": 45200,
   "file_size_bytes": 104857600
+}
+
+```
+
+### 6. Truncated Export (Exceeds max_items_limit)
+
+If the server implements Option B (truncation with warning) and a query matches more items than `max_items_limit`:
+
+**Response (`200 OK` - Successful but Truncated):**
+
+```json
+{
+  "jobID": "exp-a1b2c3d4",
+  "type": "process",
+  "status": "successful",
+  "created": "2025-06-27T10:30:00Z",
+  "started": "2025-06-27T10:31:00Z",
+  "finished": "2025-06-27T10:50:00Z",
+  "updated": "2025-06-27T10:50:00Z",
+  "download_url": "https://data.example.com/downloads/exp-a1b2c3d4.parquet",
+  "expires_at": "2025-07-04T00:00:00Z",
+  "item_count": 500000,
+  "estimated_items": 600000,
+  "file_size_bytes": 250000000,
+  "truncated": true,
+  "message": "Export truncated to max_items_limit of 500,000. Query matched 600,000 items.",
+  "progress": 100
 }
 
 ```
