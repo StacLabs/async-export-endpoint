@@ -299,6 +299,9 @@ components:
           type: string
           format: uri
           description: Required when method is webhook.
+        webhook_secret:
+          type: string
+          description: Optional secret for HMAC-SHA256 webhook signature verification. If provided, server MUST sign webhook payloads with X-Hub-Signature-256 header.
         destination_uri:
           type: string
           format: uri

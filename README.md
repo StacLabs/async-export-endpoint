@@ -423,6 +423,96 @@ If the user requested `delivery.method: "webhook"`, the server will dispatch the
 
 ```
 
+### Webhook Verification & Security
+
+When using webhook delivery, clients need to verify that the payload genuinely came from the STAC server and not a malicious third party. This section defines the webhook verification mechanism.
+
+#### Optional Webhook Secret
+
+Clients MAY provide an optional `webhook_secret` in the delivery configuration when initiating an export:
+
+```json
+{
+  "collections": ["sentinel-2-l2a"],
+  "bbox": [-122.3, 37.7, -122.1, 37.9],
+  "export": {
+    "format": "geoparquet",
+    "delivery": {
+      "method": "webhook",
+      "webhook_url": "https://client.example.com/webhooks/export-complete",
+      "webhook_secret": "your-secret-key-here"
+    }
+  }
+}
+```
+
+#### HMAC SHA-256 Signature
+
+If a `webhook_secret` is provided, the server MUST sign the webhook payload using HMAC SHA-256 and include the signature in the `X-Hub-Signature-256` header:
+
+**Header Format:**
+```
+X-Hub-Signature-256: sha256=<hex-encoded-hmac-sha256-signature>
+```
+
+**Signature Computation:**
+1. Serialize the webhook payload to JSON (canonical form, no extra whitespace)
+2. Compute HMAC-SHA256 of the JSON payload using the `webhook_secret` as the key
+3. Encode the result as hexadecimal
+4. Include in the `X-Hub-Signature-256` header
+
+**Example Header:**
+```
+X-Hub-Signature-256: sha256=abcd1234ef5678...
+```
+
+#### Client Verification
+
+Clients receiving a webhook MUST:
+
+1. Extract the `X-Hub-Signature-256` header value
+2. Compute the expected HMAC-SHA256 signature using the stored `webhook_secret`
+3. Compare the computed signature with the header value using constant-time comparison
+4. Only process the payload if signatures match
+
+**Example (Python):**
+```python
+import hmac
+import hashlib
+import json
+
+webhook_secret = "your-secret-key-here"
+received_signature = request.headers.get("X-Hub-Signature-256", "").replace("sha256=", "")
+payload_body = request.get_data()
+
+expected_signature = hmac.new(
+    webhook_secret.encode(),
+    payload_body,
+    hashlib.sha256
+).hexdigest()
+
+if not hmac.compare_digest(received_signature, expected_signature):
+    return 401  # Unauthorized
+```
+
+#### Security Recommendations
+
+1. **Use HTTPS Only:** Webhook URLs MUST use HTTPS to prevent man-in-the-middle attacks
+2. **Rotate Secrets:** Periodically rotate `webhook_secret` values
+3. **Constant-Time Comparison:** Always use constant-time comparison (e.g., `hmac.compare_digest()`) to prevent timing attacks
+4. **Log Verification Failures:** Log failed signature verifications for security auditing
+5. **Idempotency:** Implement idempotent webhook handlers to safely handle retries
+
+#### Webhook Retry Policy
+
+If the server receives a non-2xx response from the webhook URL, it SHOULD retry with exponential backoff:
+- Initial retry: 1 minute
+- Second retry: 5 minutes
+- Third retry: 30 minutes
+- Maximum retries: 3 attempts
+
+Servers MUST NOT retry indefinitely to prevent overwhelming client systems.
+
 ### 6. Truncated Export (Exceeds max_items_limit)
 
 If the server implements Option B (truncation with warning) and a query matches more items than `max_items_limit`:
