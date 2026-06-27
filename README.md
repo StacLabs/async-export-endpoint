@@ -756,6 +756,77 @@ Implementations MAY define an optional `credentials` object in the `DeliveryConf
 - Credentials are exposed in request body; consider encryption at rest
 - More complex credential lifecycle management
 
+#### Multi-File Exports & Pre-Signed URL Limitations
+
+**Important Consideration:** Pre-Signed URLs have a critical limitation for large exports:
+
+A single pre-signed URL is strictly bound to one specific object path (e.g., `exp-abc123.parquet`). If an export is very large (e.g., 100+ GB) and the server needs to chunk it into multiple smaller files (e.g., `part-001.parquet`, `part-002.parquet`, `part-003.parquet`), a single pre-signed URL **cannot be used** to write multiple files.
+
+**Recommendation for Multi-File Exports:**
+
+If your implementation anticipates chunking large exports into multiple files, **use the credentials object approach (Option 2)** rather than pre-signed URLs. This allows the server to write multiple files to the same bucket prefix without requiring a separate pre-signed URL for each chunk.
+
+**Example: Multi-File Export with Credentials**
+
+```json
+{
+  "export": {
+    "format": "geoparquet",
+    "delivery": {
+      "method": "s3",
+      "destination_uri": "s3://my-organization-bucket/stac-exports/exp-abc123/",
+      "credentials": {
+        "access_key_id": "AKIA...",
+        "secret_access_key": "...",
+        "session_token": "..."
+      }
+    }
+  }
+}
+```
+
+The server can then write:
+- `s3://my-organization-bucket/stac-exports/exp-abc123/part-001.parquet`
+- `s3://my-organization-bucket/stac-exports/exp-abc123/part-002.parquet`
+- `s3://my-organization-bucket/stac-exports/exp-abc123/part-003.parquet`
+
+**Response indicating multi-file export:**
+
+```json
+{
+  "jobID": "exp-a1b2c3d4",
+  "status": "successful",
+  "destination_uri": "s3://my-organization-bucket/stac-exports/exp-abc123/",
+  "item_count": 5000000,
+  "file_size_bytes": 150000000000,
+  "file_count": 3,
+  "files": [
+    {
+      "path": "part-001.parquet",
+      "size_bytes": 50000000000
+    },
+    {
+      "path": "part-002.parquet",
+      "size_bytes": 50000000000
+    },
+    {
+      "path": "part-003.parquet",
+      "size_bytes": 50000000000
+    }
+  ]
+}
+```
+
+**Decision Matrix:**
+
+| Scenario | Recommended Approach |
+| --- | --- |
+| Single-file export, small (<1 GB) | Pre-Signed URL (Option 1) |
+| Single-file export, large (>1 GB) | Either option works |
+| Multi-file export (chunked) | Credentials object (Option 2) |
+| Maximum security (no server IAM) | Pre-Signed URL (Option 1) |
+| Maximum flexibility | Credentials object (Option 2) |
+
 #### Implementation Guidelines
 
 1. **Validate destination URIs:** Implement allowlisting or pattern matching to prevent writes to arbitrary locations.

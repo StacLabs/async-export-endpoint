@@ -448,6 +448,27 @@ components:
           type: integer
           minimum: 0
           description: Size of the exported file in bytes.
+        file_count:
+          type: integer
+          minimum: 1
+          description: Number of files in the export (present if export is chunked into multiple files).
+        files:
+          type: array
+          description: List of exported files with their paths and sizes (present if export is chunked into multiple files).
+          items:
+            type: object
+            required:
+              - path
+              - size_bytes
+            properties:
+              path:
+                type: string
+                description: Relative path of the file within the destination_uri directory.
+                example: part-001.parquet
+              size_bytes:
+                type: integer
+                minimum: 0
+                description: Size of this individual file in bytes.
         error:
           oneOf:
             - type: string
