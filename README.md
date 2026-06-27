@@ -52,6 +52,76 @@ This allows clients to initiate an export that is inherently constrained by the 
 
 **Note on Status Checks for Appended Routes:** If an API implements the optional search-appended initiation routes, it MUST return a `status_url` in the `202 Accepted` response that points to the core status endpoint (e.g., `https://api.example.com/export/{jobID}`). It is NOT required to mirror the status check endpoints across all search paths.
 
+### Job Cancellation Endpoint (Optional)
+
+Implementations MAY support job cancellation via the DELETE method. This allows clients to abort long-running export jobs that are no longer needed.
+
+| Method | URI | Description |
+| --- | --- | --- |
+| `DELETE` | `/export/{jobID}` | **Cancel Export Job.** Requests cancellation of a running or queued export job. Sets job status to `dismissed`. |
+
+**Request:**
+```
+DELETE /export/exp-a1b2c3d4 HTTP/1.1
+Host: api.example.com
+```
+
+**Response (`202 Accepted` - Cancellation Accepted):**
+```
+HTTP/1.1 202 Accepted
+Content-Type: application/json
+
+{
+  "jobID": "exp-a1b2c3d4",
+  "type": "process",
+  "status": "dismissed",
+  "message": "Export job cancellation requested. Job will be stopped."
+}
+```
+
+**Response (`200 OK` - Already Completed):**
+If the job has already completed (status is `successful` or `failed`), the server MAY return 200 OK with the current status, indicating that cancellation is not possible.
+
+```
+HTTP/1.1 200 OK
+Content-Type: application/json
+
+{
+  "jobID": "exp-a1b2c3d4",
+  "type": "process",
+  "status": "successful",
+  "message": "Job has already completed. Cancellation is not possible."
+}
+```
+
+**Response (`404 Not Found`):**
+If the job ID does not exist, return 404.
+
+**Cancellation Semantics:**
+
+- **Queued Jobs (status: `accepted`):** Cancellation MUST succeed immediately. The job is removed from the queue and status is set to `dismissed`.
+- **Running Jobs (status: `running`):** Cancellation SHOULD succeed, but the server MAY take time to stop the background worker. Status transitions to `dismissed` once the worker has stopped.
+- **Completed Jobs (status: `successful` or `failed`):** Cancellation MUST fail (return 200 OK with current status or 400 Bad Request). The job cannot be undone.
+- **Already Dismissed Jobs (status: `dismissed`):** Cancellation request is idempotent. Return 202 Accepted with current status.
+
+**Implementation Recommendations:**
+
+1. **Idempotency:** Multiple DELETE requests for the same job SHOULD be idempotent (return 202 Accepted)
+2. **Resource Cleanup:** When a job is dismissed, the server SHOULD clean up temporary files and release compute resources
+3. **Audit Logging:** Log all cancellation requests for compliance and debugging
+4. **Graceful Shutdown:** For running jobs, allow the worker a reasonable grace period (e.g., 30 seconds) to shut down cleanly before forcibly terminating
+5. **Webhook Notification:** If the job has a webhook configured, the server MAY send a final webhook payload with status `dismissed` to notify the client
+
+**Catalog-Scoped Cancellation:**
+
+If implementing the optional `/catalogs/{catalogId}/export` endpoint, implementations SHOULD also support:
+
+| Method | URI | Description |
+| --- | --- | --- |
+| `DELETE` | `/catalogs/{catalogId}/export/{jobID}` | Cancel a catalog-scoped export job. |
+
+However, the cancellation MUST still update the job status via the core status endpoint (`GET /export/{jobID}`).
+
 ## STAC-Native Discovery via Hypermedia Links
 
 STAC heavily relies on hypermedia (links) for discoverability. Rather than requiring clients to hardcode the `/export` path, implementations MUST advertise export capabilities through standardized link relations in the API's root catalog (landing page).

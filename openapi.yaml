@@ -136,6 +136,39 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/Error'
+    delete:
+      tags:
+        - Exports
+      summary: Cancel export job
+      operationId: cancelExport
+      description: |
+        Requests cancellation of a running or queued export job (Optional).
+        
+        Sets the job status to 'dismissed'. Cancellation is idempotent and may be
+        called multiple times for the same job. If the job has already completed
+        (successful or failed), cancellation is not possible and the server returns
+        the current status.
+      parameters:
+        - $ref: '#/components/parameters/jobID'
+      responses:
+        '202':
+          description: Cancellation accepted
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ExportStatus'
+        '200':
+          description: Job already completed, cancellation not possible
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ExportStatus'
+        '404':
+          description: Export task not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
 
   /catalogs/{catalogId}/export:
     post:
