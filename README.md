@@ -222,3 +222,80 @@ If the user requested `delivery.method: "webhook"`, the server will dispatch the
 }
 
 ```
+
+---
+
+## Security Considerations
+
+### Cloud Push Credentials & SSRF Risk Mitigation
+
+When implementing cloud push delivery methods (`s3`, `gcs`, `azure`), servers must carefully handle authentication to prevent Server-Side Request Forgery (SSRF) attacks and unauthorized data access.
+
+#### The Risk
+
+If a server relies on its own IAM role or credentials to write to cloud buckets, a malicious user could:
+- Provide a `destination_uri` pointing to another organization's bucket
+- Overwrite sensitive data in buckets the server has access to
+- Exfiltrate data by redirecting exports to attacker-controlled locations
+
+#### Recommended Approaches
+
+**Option 1: Pre-Signed URLs (Recommended)**
+
+Clients provide Pre-Signed URLs (AWS S3) or Signed URLs (GCS) as the `destination_uri`. The server has no need for native cloud IAM permissions—it simply writes to the URL provided.
+
+```json
+{
+  "export": {
+    "format": "geoparquet",
+    "delivery": {
+      "method": "s3",
+      "destination_uri": "https://my-organization-bucket.s3.amazonaws.com/stac-exports/exp-abc123.parquet?X-Amz-Algorithm=AWS4-HMAC-SHA256&X-Amz-Credential=..."
+    }
+  }
+}
+```
+
+**Advantages:**
+- Server requires no cloud IAM permissions
+- Clients maintain full control over access scope and expiration
+- Works across multiple cloud providers with their respective signing mechanisms
+
+**Option 2: Optional Credentials Object**
+
+Implementations MAY define an optional `credentials` object in the `DeliveryConfig` to allow clients to provide temporary credentials scoped to a specific bucket or prefix.
+
+```json
+{
+  "export": {
+    "format": "geoparquet",
+    "delivery": {
+      "method": "s3",
+      "destination_uri": "s3://my-organization-bucket/stac-exports/",
+      "credentials": {
+        "access_key_id": "AKIA...",
+        "secret_access_key": "...",
+        "session_token": "..."
+      }
+    }
+  }
+}
+```
+
+**Advantages:**
+- Flexible for clients who cannot generate pre-signed URLs
+- Credentials can be scoped and time-limited
+
+**Disadvantages:**
+- Requires secure transmission (HTTPS only)
+- Credentials are exposed in request body; consider encryption at rest
+- More complex credential lifecycle management
+
+#### Implementation Guidelines
+
+1. **Validate destination URIs:** Implement allowlisting or pattern matching to prevent writes to arbitrary locations.
+2. **Log all cloud operations:** Record which user initiated exports and where files were written for audit trails.
+3. **Enforce HTTPS:** Never accept cloud credentials or pre-signed URLs over unencrypted connections.
+4. **Prefer pre-signed URLs:** When possible, encourage clients to use pre-signed URLs to minimize the server's cloud permissions footprint.
+5. **Scope credentials tightly:** If using temporary credentials, ensure they are scoped to specific buckets, prefixes, and operations (write-only).
+6. **Implement rate limiting:** Prevent abuse by limiting the number of concurrent exports per user or API key.
