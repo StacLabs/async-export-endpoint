@@ -4,16 +4,16 @@
 * **Conformance Classes:**
   * `https://api.stacspec.org/v1.0.0/core` (required)
   * `https://api.stacspec.org/v1.0.0-beta.1/async-export` (required)
-  * `https://api.stacspec.org/v1.0.0-rc.2/multi-tenant-catalogs` (required if implementing `/catalogs/{catalogId}/search/export`)
-  * `https://api.stacspec.org/v1.0.0-rc.2/multi-tenant-catalogs/search` (required if implementing `/catalogs/{catalogId}/search/export`)
+  * `https://api.stacspec.org/v1.0.0-rc.2/multi-tenant-catalogs` (required if implementing `/catalogs/{catalogId}/export`)
+  * `https://api.stacspec.org/v1.0.0-rc.2/multi-tenant-catalogs/search` (required if implementing `/catalogs/{catalogId}/export`)
 
 
 * **Scope:** STAC API - Core
 * **Extension Maturity Classification:** Proposal
 * **Dependencies:**
   * [STAC API - Core](https://github.com/radiantearth/stac-api-spec/blob/main/core)
-  * [Multi-Tenant Catalogs Extension](https://github.com/StacLabs/multi-tenant-catalogs) (Required if implementing `/catalogs/{catalogId}/search/export`)
-  * [Multi-Tenant Catalogs Search Conformance](https://github.com/StacLabs/multi-tenant-catalogs#scoped-search-recursive-traversal) (Required if implementing `/catalogs/{catalogId}/search/export`)
+  * [Multi-Tenant Catalogs Extension](https://github.com/StacLabs/multi-tenant-catalogs) (Required if implementing `/catalogs/{catalogId}/export`)
+  * [Multi-Tenant Catalogs Search Conformance](https://github.com/StacLabs/multi-tenant-catalogs#scoped-search-recursive-traversal) (Required if implementing `/catalogs/{catalogId}/export`)
 
 
 * **Owner:** @jonhealy1
@@ -42,13 +42,13 @@ Implementations MUST support the following core endpoints to conform to this ext
 
 ### Catalog-Scoped Endpoint (Optional)
 
-To provide a scoped export workflow, implementations that support Multi-Tenant Catalogs MAY append `/export` to the catalog-scoped search route.
+To provide a scoped export workflow, implementations that support Multi-Tenant Catalogs MAY append `/export` to the catalog route.
 
 This allows clients to initiate an export that is inherently constrained by the catalog path, reducing the need for complex filter definitions in the request body.
 
 | Method | URI | Description |
 | --- | --- | --- |
-| `POST` | `/catalogs/{catalogId}/search/export` | **Catalog-Scoped Export.** (For use with the *Multi-Tenant Catalogs Extension*). The worker MUST restrict output to items belonging to collections within the `{catalogId}` tree. |
+| `POST` | `/catalogs/{catalogId}/export` | **Catalog-Scoped Export.** (For use with the *Multi-Tenant Catalogs Extension*). The worker MUST restrict output to items belonging to collections within the `{catalogId}` tree. |
 
 **Note on Status Checks for Appended Routes:** If an API implements the optional search-appended initiation routes, it MUST return a `status_url` in the `202 Accepted` response that points to the core status endpoint (e.g., `https://api.example.com/export/{exportId}`). It is NOT required to mirror the status check endpoints across all search paths.
 

@@ -11,8 +11,8 @@ info:
     Conformance classes:
     - https://api.stacspec.org/v1.0.0/core (required)
     - https://api.stacspec.org/v1.0.0-beta.1/async-export (required)
-    - https://api.stacspec.org/v1.0.0-rc.2/multi-tenant-catalogs (required if implementing /catalogs/{catalogId}/search/export)
-    - https://api.stacspec.org/v1.0.0-rc.2/multi-tenant-catalogs/search (required if implementing /catalogs/{catalogId}/search/export)
+    - https://api.stacspec.org/v1.0.0-rc.2/multi-tenant-catalogs (required if implementing /catalogs/{catalogId}/export)
+    - https://api.stacspec.org/v1.0.0-rc.2/multi-tenant-catalogs/search (required if implementing /catalogs/{catalogId}/export)
 
 tags:
   - name: Capabilities
@@ -111,12 +111,12 @@ paths:
               schema:
                 $ref: '#/components/schemas/Error'
 
-  /catalogs/{catalogId}/search/export:
+  /catalogs/{catalogId}/export:
     post:
       tags:
         - Scoped Catalog Export (Optional)
-      summary: Initiate export from catalog-scoped search route
-      operationId: createCatalogSearchExport
+      summary: Initiate export from catalog-scoped route
+      operationId: createCatalogExport
       description: |
         Optional route for implementations that support Multi-Tenant Catalogs.
 
