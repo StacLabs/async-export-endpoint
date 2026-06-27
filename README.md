@@ -132,40 +132,50 @@ To facilitate seamless browser downloads, servers SHOULD support a `redirect=tru
 
 ```json
 {
-  "export_id": "exp-a1b2c3d4",
-  "status": "pending",
-  "status_url": "https://api.example.com/export/exp-a1b2c3d4",
-  "message": "Export task has been queued."
+  "jobID": "exp-a1b2c3d4",
+  "type": "process",
+  "status": "accepted",
+  "message": "Export task has been queued.",
+  "created": "2025-06-27T10:30:00Z",
+  "progress": 0
 }
 
 ```
 
-### 3. Checking Task Status (`GET /export/{exportId}`)
+### 3. Checking Task Status (`GET /export/{jobID}`)
 
-**Response (`200 OK` - Processing):**
+**Response (`200 OK` - Running):**
 
 ```json
 {
-  "export_id": "exp-a1b2c3d4",
-  "status": "processing",
-  "status_url": "https://api.example.com/export/exp-a1b2c3d4",
+  "jobID": "exp-a1b2c3d4",
+  "type": "process",
+  "status": "running",
+  "created": "2025-06-27T10:30:00Z",
+  "started": "2025-06-27T10:31:00Z",
+  "updated": "2025-06-27T10:35:00Z",
   "estimated_items": 45200,
-  "progress_percentage": 45
+  "progress": 45
 }
 
 ```
 
-**Response (`200 OK` - Completed):**
+**Response (`200 OK` - Successful):**
 
 ```json
 {
-  "export_id": "exp-a1b2c3d4",
-  "status": "completed",
-  "status_url": "https://api.example.com/export/exp-a1b2c3d4",
+  "jobID": "exp-a1b2c3d4",
+  "type": "process",
+  "status": "successful",
+  "created": "2025-06-27T10:30:00Z",
+  "started": "2025-06-27T10:31:00Z",
+  "finished": "2025-06-27T10:45:00Z",
+  "updated": "2025-06-27T10:45:00Z",
   "download_url": "https://data.example.com/downloads/exp-a1b2c3d4.parquet",
-  "expires_at": "2026-07-02T00:00:00Z",
+  "expires_at": "2025-07-04T00:00:00Z",
   "item_count": 45200,
-  "file_size_bytes": 104857600
+  "file_size_bytes": 104857600,
+  "progress": 100
 }
 
 ```
@@ -191,17 +201,21 @@ If the user requests `delivery.method: "s3"`, the server bypasses local storage 
 
 ```
 
-**Response (`200 OK` - Completed):**
-Because the file is pushed directly to the user's bucket, the completed status response does not need to provide a temporary `download_url`. Instead, it confirms the exact final `destination_uri` where the file was written.
+**Response (`200 OK` - Successful):**
+Because the file is pushed directly to the user's bucket, the successful status response does not need to provide a temporary `download_url`. Instead, it confirms the exact final `destination_uri` where the file was written.
 
 ```json
 {
-  "export_id": "exp-a1b2c3d4",
-  "status": "completed",
-  "status_url": "https://api.example.com/export/exp-a1b2c3d4",
+  "jobID": "exp-a1b2c3d4",
+  "type": "process",
+  "status": "successful",
+  "created": "2025-06-27T10:30:00Z",
+  "started": "2025-06-27T10:31:00Z",
+  "finished": "2025-06-27T10:45:00Z",
   "destination_uri": "s3://my-organization-bucket/stac-exports/exp-a1b2c3d4.parquet",
   "item_count": 45200,
-  "file_size_bytes": 104857600
+  "file_size_bytes": 104857600,
+  "progress": 100
 }
 
 ```
@@ -214,14 +228,55 @@ If the user requested `delivery.method: "webhook"`, the server will dispatch the
 
 ```json
 {
-  "export_id": "exp-a1b2c3d4",
-  "status": "completed",
+  "jobID": "exp-a1b2c3d4",
+  "type": "process",
+  "status": "successful",
+  "finished": "2025-06-27T10:45:00Z",
   "download_url": "https://data.example.com/downloads/exp-a1b2c3d4.parquet",
   "item_count": 45200,
   "file_size_bytes": 104857600
 }
 
 ```
+
+---
+
+## OGC API - Processes Alignment
+
+This extension aligns with **OGC API - Processes - Part 1: Core** to ensure interoperability with existing OGC tooling and standards. Key alignments include:
+
+### Status Payload Standardization
+
+The `/export/{jobID}` response schema follows the OGC StatusInfo specification:
+
+- **`jobID`** (required): Unique job identifier (replaces `export_id`)
+- **`type`** (required): Always `"process"` for OGC conformance
+- **`status`** (required): Uses OGC-standard enum values:
+  - `accepted`: Job has been accepted and queued
+  - `running`: Job is actively processing
+  - `successful`: Job completed successfully
+  - `failed`: Job failed
+  - `dismissed`: Job was dismissed/cancelled
+- **Lifecycle Timestamps**: 
+  - `created`: When the job was created
+  - `started`: When processing began
+  - `finished`: When processing completed
+  - `updated`: Last status update timestamp
+- **`progress`** (0-100): Standardized progress percentage
+
+### STAC-Specific Extensions
+
+While maintaining OGC conformance, the extension preserves STAC-specific fields:
+- `download_url`: For polling delivery method
+- `destination_uri`: For cloud push delivery (s3, gcs, azure)
+- `expires_at`: Expiration of temporary storage
+- `estimated_items` / `item_count`: STAC-specific metadata
+- `file_size_bytes`: Export file size
+
+This dual alignment enables:
+- **OGC Interoperability**: Clients built for OGC API - Processes can consume this API
+- **STAC Specificity**: STAC-specific metadata and delivery options remain available
+- **Future Extensibility**: Additional OGC conformance classes can be adopted as needed
 
 ---
 

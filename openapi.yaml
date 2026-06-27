@@ -75,7 +75,7 @@ paths:
               schema:
                 $ref: '#/components/schemas/Error'
 
-  /export/{exportId}:
+  /export/{jobID}:
     get:
       tags:
         - Exports
@@ -87,7 +87,7 @@ paths:
         If redirect=true is provided and the export is completed with polling
         delivery, the server may respond with 303 redirecting to download_url.
       parameters:
-        - $ref: '#/components/parameters/exportId'
+        - $ref: '#/components/parameters/jobID'
         - name: redirect
           in: query
           required: false
@@ -152,11 +152,11 @@ paths:
 
 components:
   parameters:
-    exportId:
-      name: exportId
+    jobID:
+      name: jobID
       in: path
       required: true
-      description: Unique export task identifier.
+      description: Unique export task identifier (OGC API - Processes aligned).
       schema:
         type: string
 
@@ -291,53 +291,109 @@ components:
     ExportAccepted:
       type: object
       required:
-        - export_id
+        - jobID
         - status
-        - status_url
+        - type
       properties:
-        export_id:
+        jobID:
           type: string
+          description: Unique export task identifier (OGC API - Processes aligned).
           example: exp-a1b2c3d4
+        type:
+          type: string
+          enum:
+            - process
+          default: process
+          description: Type of resource (OGC API - Processes conformance).
         status:
           type: string
           enum:
-            - pending
-            - processing
-            - completed
+            - accepted
+            - running
+            - successful
             - failed
-          example: pending
-        status_url:
-          type: string
-          format: uri
-          example: https://api.example.com/export/exp-a1b2c3d4
+            - dismissed
+          example: accepted
+          description: Job status (OGC API - Processes aligned).
         message:
           type: string
           example: Export task has been queued.
+        created:
+          type: string
+          format: date-time
+          description: Timestamp when the job was created.
+        started:
+          type: string
+          format: date-time
+          description: Timestamp when the job started processing.
+        finished:
+          type: string
+          format: date-time
+          description: Timestamp when the job finished.
+        updated:
+          type: string
+          format: date-time
+          description: Timestamp of the last status update.
+        progress:
+          type: integer
+          minimum: 0
+          maximum: 100
+          description: Progress percentage (0-100).
 
     ExportStatus:
       type: object
       required:
-        - export_id
+        - jobID
         - status
-        - status_url
+        - type
       properties:
-        export_id:
+        jobID:
           type: string
+          description: Unique export task identifier (OGC API - Processes aligned).
           example: exp-a1b2c3d4
+        type:
+          type: string
+          enum:
+            - process
+          default: process
+          description: Type of resource (OGC API - Processes conformance).
         status:
           type: string
           enum:
-            - pending
-            - processing
-            - completed
+            - accepted
+            - running
+            - successful
             - failed
-        status_url:
+            - dismissed
+          description: Job status (OGC API - Processes aligned).
+        message:
           type: string
-          format: uri
+          description: Human-readable status message.
+        created:
+          type: string
+          format: date-time
+          description: Timestamp when the job was created.
+        started:
+          type: string
+          format: date-time
+          description: Timestamp when the job started processing.
+        finished:
+          type: string
+          format: date-time
+          description: Timestamp when the job finished.
+        updated:
+          type: string
+          format: date-time
+          description: Timestamp of the last status update.
+        progress:
+          type: integer
+          minimum: 0
+          maximum: 100
+          description: Progress percentage (0-100).
         download_url:
           type: string
           format: uri
-          description: Present when delivery is polling and status is completed.
+          description: Present when delivery is polling and status is successful.
         destination_uri:
           type: string
           format: uri
@@ -345,21 +401,22 @@ components:
         expires_at:
           type: string
           format: date-time
+          description: Expiration timestamp for download_url or temporary storage.
         estimated_items:
           type: integer
           minimum: 0
-        progress_percentage:
-          type: integer
-          minimum: 0
-          maximum: 100
+          description: Estimated number of items in the export.
         item_count:
           type: integer
           minimum: 0
+          description: Actual number of items exported (present when status is successful).
         file_size_bytes:
           type: integer
           minimum: 0
+          description: Size of the exported file in bytes.
         error:
           type: string
+          description: Error message if status is failed.
 
     Error:
       type: object
