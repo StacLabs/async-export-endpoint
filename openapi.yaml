@@ -500,3 +500,90 @@ components:
         description:
           type: string
           example: The requested export format is not supported.
+
+    WebhookPayload:
+      type: object
+      required:
+        - jobID
+        - type
+        - status
+      properties:
+        jobID:
+          type: string
+          description: Unique export task identifier.
+          example: exp-a1b2c3d4
+        type:
+          type: string
+          enum:
+            - process
+          default: process
+          description: Type of resource (OGC API - Processes conformance).
+        status:
+          type: string
+          enum:
+            - successful
+            - failed
+          description: Job status. Webhook is typically sent only when job is completed.
+        finished:
+          type: string
+          format: date-time
+          description: Timestamp when the job finished.
+        download_url:
+          type: string
+          format: uri
+          description: URL to download the export file (present when status is successful and delivery is polling).
+        expires_at:
+          type: string
+          format: date-time
+          description: Expiration timestamp for the download_url. Clients MUST download before this time or the URL will become invalid.
+        destination_uri:
+          type: string
+          format: uri
+          description: Cloud destination URI (present when file is pushed to cloud destination).
+        item_count:
+          type: integer
+          minimum: 0
+          description: Number of items in the export.
+        file_size_bytes:
+          type: integer
+          minimum: 0
+          description: Size of the exported file in bytes.
+        file_count:
+          type: integer
+          minimum: 1
+          description: Number of files in the export (present if export is chunked into multiple files).
+        files:
+          type: array
+          description: List of exported files with their paths and sizes (present if export is chunked into multiple files).
+          items:
+            type: object
+            required:
+              - path
+              - size_bytes
+            properties:
+              path:
+                type: string
+                description: Relative path of the file within the destination_uri directory.
+                example: part-001.parquet
+              size_bytes:
+                type: integer
+                minimum: 0
+                description: Size of this individual file in bytes.
+        error:
+          oneOf:
+            - type: string
+              description: Human-readable error message when status is failed.
+            - type: object
+              required:
+                - code
+                - description
+              properties:
+                code:
+                  type: string
+                  description: Error code (e.g., ItemLimitExceeded, InvalidCredentials)
+                description:
+                  type: string
+                  description: Detailed error description
+        message:
+          type: string
+          description: Optional human-readable message about the job status.

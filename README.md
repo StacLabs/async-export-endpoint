@@ -526,11 +526,25 @@ If the user requested `delivery.method: "webhook"`, the server will dispatch the
   "status": "successful",
   "finished": "2025-06-27T10:45:00Z",
   "download_url": "https://data.example.com/downloads/exp-a1b2c3d4.parquet",
+  "expires_at": "2025-07-04T00:00:00Z",
   "item_count": 45200,
   "file_size_bytes": 104857600
 }
 
 ```
+
+**Payload Fields:**
+
+- **`jobID`**: Unique export task identifier
+- **`type`**: Always `"process"` for OGC conformance
+- **`status`**: Job status (typically `"successful"` or `"failed"` for webhook delivery)
+- **`finished`**: Timestamp when the job completed
+- **`download_url`**: URL to download the export file (present when status is successful and delivery is polling)
+- **`expires_at`**: Expiration timestamp for the `download_url`. Clients MUST download the file before this time or the URL will become invalid
+- **`item_count`**: Number of items in the export
+- **`file_size_bytes`**: Size of the exported file in bytes
+
+**Important:** The `expires_at` field is critical for webhook delivery. If the client's automated pipeline is delayed or queued, the client needs to know how long the download URL remains valid. Clients MUST check this timestamp and download the file before expiration.
 
 ### Webhook Verification & Security
 
