@@ -50,7 +50,70 @@ This allows clients to initiate an export that is inherently constrained by the 
 | --- | --- | --- |
 | `POST` | `/catalogs/{catalogId}/export` | **Catalog-Scoped Export.** (For use with the *Multi-Tenant Catalogs Extension*). The worker MUST restrict output to items belonging to collections within the `{catalogId}` tree. |
 
-**Note on Status Checks for Appended Routes:** If an API implements the optional search-appended initiation routes, it MUST return a `status_url` in the `202 Accepted` response that points to the core status endpoint (e.g., `https://api.example.com/export/{exportId}`). It is NOT required to mirror the status check endpoints across all search paths.
+**Note on Status Checks for Appended Routes:** If an API implements the optional search-appended initiation routes, it MUST return a `status_url` in the `202 Accepted` response that points to the core status endpoint (e.g., `https://api.example.com/export/{jobID}`). It is NOT required to mirror the status check endpoints across all search paths.
+
+## STAC-Native Discovery via Hypermedia Links
+
+STAC heavily relies on hypermedia (links) for discoverability. Rather than requiring clients to hardcode the `/export` path, implementations MUST advertise export capabilities through standardized link relations in the API's root catalog (landing page).
+
+### Root Catalog Links
+
+The root catalog (`GET /`) MUST include the following link relations to enable discovery:
+
+```json
+{
+  "links": [
+    {
+      "rel": "export-capabilities",
+      "href": "https://api.example.com/export/capabilities",
+      "type": "application/json",
+      "title": "Export Capabilities"
+    },
+    {
+      "rel": "export",
+      "href": "https://api.example.com/export",
+      "type": "application/json",
+      "title": "Initiate Export"
+    }
+  ]
+}
+```
+
+### Link Relation Definitions
+
+- **`rel="export-capabilities"`** (REQUIRED): Points to the `/export/capabilities` endpoint. Clients use this to discover supported formats and delivery methods before initiating an export.
+- **`rel="export"`** (REQUIRED): Points to the `/export` endpoint for initiating export jobs. Clients POST search queries and export configurations to this URL.
+
+### Catalog-Scoped Export Links
+
+If implementing the optional `/catalogs/{catalogId}/export` endpoint, each catalog SHOULD include a link with `rel="export"` pointing to its scoped export endpoint:
+
+```json
+{
+  "id": "sentinel-2-l2a",
+  "links": [
+    {
+      "rel": "export",
+      "href": "https://api.example.com/catalogs/sentinel-2-l2a/export",
+      "type": "application/json",
+      "title": "Export from this Catalog"
+    }
+  ]
+}
+```
+
+### Discovery Workflow
+
+1. **Client discovers export capability:** Client fetches the root catalog and searches for `rel="export-capabilities"` link
+2. **Client queries capabilities:** Client follows the link to retrieve supported formats and delivery methods
+3. **Client initiates export:** Client follows the `rel="export"` link to POST an export request
+4. **Client monitors progress:** Client uses the `status_url` returned in the `202 Accepted` response to poll for job status
+
+This approach ensures:
+- **Zero hardcoding:** Clients don't need to know the `/export` path structure
+- **Version flexibility:** APIs can reorganize paths without breaking clients
+- **Crawlability:** Automated tools and crawlers can discover export features
+- **STAC conformance:** Aligns with STAC's hypermedia-first design philosophy
 
 ## Delivery Behavior & Conformance
 

@@ -8,6 +8,15 @@ info:
     This extension adds asynchronous bulk export capabilities through a dedicated
     export task API.
 
+    ## STAC-Native Discovery
+
+    Implementations MUST advertise export capabilities via hypermedia links in the root
+    catalog (landing page) using standardized rel types:
+    - rel="export-capabilities": Points to GET /export/capabilities
+    - rel="export": Points to POST /export
+
+    This enables clients to discover export features without hardcoding paths.
+
     Conformance classes:
     - https://api.stacspec.org/v1.0.0/core (required)
     - https://api.stacspec.org/v1.0.0-beta.1/async-export (required)
@@ -29,7 +38,12 @@ paths:
         - Capabilities
       summary: Get export capabilities
       operationId: getExportCapabilities
-      description: Returns supported output formats and delivery methods.
+      description: |
+        Returns supported output formats and delivery methods.
+        
+        This endpoint is discovered via the rel="export-capabilities" link in the root catalog.
+        Clients SHOULD query this endpoint before initiating an export to determine
+        what formats and delivery methods are supported.
       responses:
         '200':
           description: Export capabilities
@@ -47,8 +61,10 @@ paths:
       description: |
         Submits an async export task.
 
+        This endpoint is discovered via the rel="export" link in the root catalog.
         The request body accepts STAC Item Search parameters and an export
-        configuration object.
+        configuration object. The server responds with 202 Accepted and a jobID
+        for polling the task status.
       requestBody:
         required: true
         content:
