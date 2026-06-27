@@ -2,19 +2,18 @@
 
 * **Title:** Async Export Endpoint
 * **Conformance Classes:**
-* `https://api.stacspec.org/v1.0.0/core` (required)
-* `https://api.stacspec.org/v1.0.0-beta.1/async-export` (required)
-* `https://api.stacspec.org/v1.0.0-rc.2/multi-tenant-catalogs` (required if implementing `/catalogs/{catalogId}/search/export`)
-* `https://api.stacspec.org/v1.0.0-rc.2/multi-tenant-catalogs/search` (required if implementing `/catalogs/{catalogId}/search/export`)
+  * `https://api.stacspec.org/v1.0.0/core` (required)
+  * `https://api.stacspec.org/v1.0.0-beta.1/async-export` (required)
+  * `https://api.stacspec.org/v1.0.0-rc.2/multi-tenant-catalogs` (required if implementing `/catalogs/{catalogId}/search/export`)
+  * `https://api.stacspec.org/v1.0.0-rc.2/multi-tenant-catalogs/search` (required if implementing `/catalogs/{catalogId}/search/export`)
 
 
 * **Scope:** STAC API - Core
 * **Extension Maturity Classification:** Proposal
 * **Dependencies:**
-* STAC API - Core
-* STAC API - Item Search (Required if implementing `/catalogs/{catalogId}/search/export`)
-* Multi-Tenant Catalogs Extension (Required if implementing `/catalogs/{catalogId}/search/export`)
-* Multi-Tenant Catalogs Search Conformance (Required if implementing `/catalogs/{catalogId}/search/export`)
+  * [STAC API - Core](https://github.com/radiantearth/stac-api-spec/blob/main/core)
+  * [Multi-Tenant Catalogs Extension](https://github.com/StacLabs/multi-tenant-catalogs) (Required if implementing `/catalogs/{catalogId}/search/export`)
+  * [Multi-Tenant Catalogs Search Conformance](https://github.com/StacLabs/multi-tenant-catalogs#scoped-search-recursive-traversal) (Required if implementing `/catalogs/{catalogId}/search/export`)
 
 
 * **Owner:** @jonhealy1
