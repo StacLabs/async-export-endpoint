@@ -74,6 +74,11 @@ paths:
       responses:
         '202':
           description: Export task accepted
+          headers:
+            Retry-After:
+              schema:
+                type: integer
+              description: Recommended number of seconds to wait before polling status. Clients MUST respect this value.
           content:
             application/json:
               schema:
@@ -114,6 +119,11 @@ paths:
       responses:
         '200':
           description: Export task status
+          headers:
+            Retry-After:
+              schema:
+                type: integer
+              description: Recommended number of seconds to wait before polling again. Only present if status is accepted or running.
           content:
             application/json:
               schema:
@@ -149,6 +159,11 @@ paths:
       responses:
         '202':
           description: Export task accepted
+          headers:
+            Retry-After:
+              schema:
+                type: integer
+              description: Recommended number of seconds to wait before polling status. Clients MUST respect this value.
           content:
             application/json:
               schema:

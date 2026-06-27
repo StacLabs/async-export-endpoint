@@ -148,6 +148,115 @@ Once the status is `completed`, the response MUST include a `download_url`.
 **The `?redirect=true` Parameter:**
 To facilitate seamless browser downloads, servers SHOULD support a `redirect=true` query parameter. If this parameter is present and the task is `successful`, the server MUST respond with a `303 See Other` HTTP status, redirecting the client directly to the `download_url`. This allows UI clients to trigger native "Save As..." browser dialogs.
 
+## Polling Etiquette & Rate Control
+
+When clients poll the status endpoint, they must do so responsibly to avoid overwhelming the server. This section defines polling best practices and server-side rate control mechanisms.
+
+### Retry-After Header (REQUIRED)
+
+Servers MUST include the standard `Retry-After` HTTP header in the following responses:
+
+1. **`202 Accepted` response** (when job is queued)
+2. **`200 OK` response** (when job status is `accepted` or `running`)
+
+The `Retry-After` header tells clients the minimum number of seconds to wait before polling again.
+
+**Header Format:**
+```
+Retry-After: <seconds>
+```
+
+**Example:**
+```
+HTTP/1.1 202 Accepted
+Retry-After: 5
+Content-Type: application/json
+
+{
+  "jobID": "exp-a1b2c3d4",
+  "status": "accepted",
+  "message": "Export task has been queued."
+}
+```
+
+### Recommended Retry-After Values
+
+- **Initial submission (202 Accepted):** `Retry-After: 5` (5 seconds minimum)
+- **Early processing (status: accepted):** `Retry-After: 5-10` (5-10 seconds)
+- **Active processing (status: running):** `Retry-After: 10-30` (10-30 seconds, can increase with progress)
+- **Completed (status: successful/failed):** No `Retry-After` needed (client should not poll further)
+
+Servers MAY increase `Retry-After` values dynamically based on:
+- Current server load
+- Estimated time to completion
+- Progress percentage (e.g., increase wait time as progress approaches 100%)
+
+### Client Polling Behavior
+
+Clients MUST respect the `Retry-After` header:
+
+1. **Extract the header:** Read the `Retry-After` value from the response
+2. **Wait the specified duration:** Do not poll before the specified number of seconds have elapsed
+3. **Implement exponential backoff:** If the server is unavailable (5xx errors), apply exponential backoff with jitter
+4. **Set a maximum poll interval:** Do not poll more frequently than the server's `Retry-After` suggests
+
+**Example (Python):**
+```python
+import time
+import requests
+
+def poll_export_status(status_url, max_attempts=100):
+    for attempt in range(max_attempts):
+        response = requests.get(status_url)
+        
+        # Extract Retry-After header
+        retry_after = int(response.headers.get("Retry-After", 5))
+        
+        if response.status_code == 200:
+            data = response.json()
+            if data["status"] in ["successful", "failed"]:
+                return data  # Job complete, stop polling
+            
+            # Job still running, wait before next poll
+            print(f"Job still running. Waiting {retry_after} seconds...")
+            time.sleep(retry_after)
+        else:
+            # Server error, apply exponential backoff
+            wait_time = min(retry_after * (2 ** attempt), 300)  # Cap at 5 minutes
+            print(f"Server error. Waiting {wait_time} seconds...")
+            time.sleep(wait_time)
+    
+    raise TimeoutError("Export job did not complete within timeout")
+```
+
+### Server Recommendations
+
+1. **Always include Retry-After:** Never omit this header from polling responses
+2. **Adaptive timing:** Adjust `Retry-After` based on job progress and server load
+3. **Exponential increase:** Consider increasing `Retry-After` as the job progresses (e.g., 5s → 10s → 20s)
+4. **Document defaults:** Clearly document the default `Retry-After` value in API documentation
+5. **Rate limiting:** Optionally implement rate limiting (429 Too Many Requests) for clients that ignore `Retry-After`
+
+### Rate Limiting (Optional)
+
+Servers MAY implement rate limiting to protect against aggressive polling:
+
+- Return `429 Too Many Requests` if a client polls more frequently than the `Retry-After` interval
+- Include `Retry-After` header in the 429 response indicating when the client can retry
+- Log rate limit violations for monitoring and debugging
+
+**Example 429 Response:**
+```
+HTTP/1.1 429 Too Many Requests
+Retry-After: 30
+Content-Type: application/json
+
+{
+  "code": "TooManyRequests",
+  "description": "You are polling too frequently. Please wait 30 seconds before the next request."
+}
+```
+
 ## Error Handling and Limit Enforcement
 
 ### Item Count Limits
